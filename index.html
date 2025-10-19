@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>APOS Conecta Salud — HCDU</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img src="logo-apos.png" alt="Logo APOS" class="logo-img" onerror="this.style.display='none'">
+        <div>
+          <h1>APOS Conecta Salud</h1>
+          <small class="tagline">Historia Clínica Digital Unificada</small>
+        </div>
+      </div>
+
+      <nav class="topnav" role="navigation" aria-label="Menú principal">
+        <a href="#" class="nav-link" data-nav="dashboard">Inicio</a>
+        <a href="#" class="nav-link" data-nav="pacientes">Pacientes</a>
+        <a href="#" class="nav-link" data-nav="historial">Historia Clínica</a>
+        <a href="#" class="nav-link btn-cta" id="open-login">Acceder</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <aside class="sidebar" aria-label="Barra lateral">
+      <div class="profile-card">
+        <div class="avatar" aria-hidden="true">AD</div>
+        <div>
+          <div class="role">Usuario FT</div>
+          <div class="aff">APOS La Rioja</div>
+        </div>
+      </div>
+
+      <div class="menu" role="menu" aria-label="Secciones">
+        <button class="menu-item active" data-section="dashboard" role="menuitem">Tablero</button>
+        <button class="menu-item" data-section="pacientes" role="menuitem">Pacientes</button>
+        <button class="menu-item" data-section="historial" role="menuitem">Historia Clínica</button>
+        <button class="menu-item" data-section="autorizaciones" role="menuitem">Autorizaciones</button>
+        <button class="menu-item" data-section="reportes" role="menuitem">Reportes</button>
+        <button class="menu-item" data-section="config" role="menuitem">Configuración</button>
+        <button class="menu-item" data-section="nuevo-paciente" role="menuitem">Nuevo Paciente</button>
+      </div>
+
+      <div class="help">
+        <h4>Accesos rápidos</h4>
+        <ul>
+          <li><a href="#" data-nav="pacientes">Consulta de expedientes</a></li>
+          <li><a href="#" data-nav="autorizaciones">Prestadores</a></li>
+          <li><a href="#" data-nav="config">Contacto</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="content" id="content" tabindex="-1">
+      <!-- Dashboard -->
+      <section class="section" id="dashboard">
+        <div class="section-header">
+          <h2>Tablero — APOS Conecta Salud</h2>
+          <div class="search">
+            <input id="global-search" aria-label="Buscar afiliado" placeholder="Buscar afiliado por nombre o documento..." />
+            <button id="btn-search" class="small-btn">Buscar</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card stats">
+            <h3>Indicadores</h3>
+            <div class="stats-grid">
+              <div>
+                <span class="big">43.782</span>
+                <small>Afiliados</small>
+              </div>
+              <div>
+                <span class="big">1.234</span>
+                <small>Consultas mes en curso</small>
+              </div>
+              <div>
+                <span class="big">256</span>
+                <small>Autorizaciones pendientes</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="card news">
+            <h3>Novedas</h3>
+            <ul id="news-list" class="news-list">
+              <li><strong>Nuevo protocolo Plan oncológico</strong><br><small>25 ago, 2025</small></li>
+              <li><strong>Modificación gestión de derivaciones</strong><br><small>3 oct, 2025</small></li>
+              <li><strong>Servicios APOS24</strong><br><small>10 may, 2025</small></li>
+            </ul>
+          </div>
+
+          <div class="card recent">
+            <h3>Últimos pacientes consultados</h3>
+            <ul id="recent-patients" class="recent-list"></ul>
+          </div>
+
+          <!-- Objetivo SMART card -->
+          <div class="card objective-card" id="objective-card">
+            <h3>Medición del Objetivo</h3>
+            <p><strong>Meta (18 meses):</strong> Implementar la HCDU “APOS Conecta Salud”...</p>
+            <div class="kpi-grid">
+              <div class="kpi">
+                <div class="kpi-title">Consultas registradas</div>
+                <div class="kpi-progress"><div class="kpi-bar" id="kpi-consultas" style="width:0%"></div></div>
+                <div class="kpi-meta"><span id="kpi-consultas-text">0%</span> / 60%</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-title">Prestadores integrados</div>
+                <div class="kpi-progress"><div class="kpi-bar" id="kpi-prestadores" style="width:0%"></div></div>
+                <div class="kpi-meta"><span id="kpi-prestadores-text">0%</span> / 70%</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-title">Reducción duplicados</div>
+                <div class="kpi-progress"><div class="kpi-bar" id="kpi-duplicados" style="width:0%"></div></div>
+                <div class="kpi-meta"><span id="kpi-duplicados-text">0%</span> / 25%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pacientes -->
+      <section class="section hidden" id="pacientes">
+        <div class="section-header">
+          <h2>Pacientes — Búsqueda</h2>
+          <div class="mini-search">
+            <input id="patient-filter" placeholder="DNI, Apellido o Nombre" />
+            <button id="filter-btn" class="small-btn">Filtrar</button>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <table id="patients-table">
+            <thead>
+              <tr><th>Afiliado</th><th>DNI</th><th>Edad</th><th>Última atención</th><th>Acciones</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Historia Clínica -->
+      <section class="section hidden" id="historial">
+        <div class="section-header">
+          <h2>Historia Clínica Digital Unificada</h2>
+          <div class="patient-select">
+            <select id="select-patient" aria-label="Seleccionar afiliado">
+              <option value="">-- Seleccionar afiliado --</option>
+            </select>
+            <button id="load-hc" class="small-btn">Cargar</button>
+          </div>
+        </div>
+
+        <div class="card hc-card" id="hc-card" style="display:none;">
+          <div class="hc-top">
+            <div>
+              <h3 id="hc-name">Nombre Afiliado</h3>
+              <small id="hc-dni">DNI: 00000000</small>
+            </div>
+            <div class="hc-actions">
+              <button id="download-hc" class="small-btn">Descargar PDF</button>
+              <button id="print-hc" class="small-btn">Imprimir</button>
+            </div>
+          </div>
+
+          <div class="hc-body">
+            <div class="hc-column">
+              <h4>Resumen</h4>
+              <p id="hc-summary">—</p>
+              <h4>Alergias</h4>
+              <ul id="hc-allergies"></ul>
+              <h4>Medicación</h4>
+              <ul id="hc-meds"></ul>
+            </div>
+
+            <div class="hc-column">
+              <h4>Encuentros / Prestaciones</h4>
+              <ul id="hc-encounters"></ul>
+              <h4>Resultados de laboratorio</h4>
+              <ul id="hc-labs"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Autorizaciones -->
+      <section class="section hidden" id="autorizaciones">
+        <div class="section-header">
+          <h2>Autorizaciones</h2>
+          <p class="muted">Autorizaciones vinculadas a la HCDU.</p>
+        </div>
+
+        <div class="card">
+          <table id="auth-table">
+            <thead><tr><th>#</th><th>Afiliado</th><th>Tipo</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Reportes -->
+      <section class="section hidden" id="reportes">
+        <div class="section-header">
+          <h2>Reportes</h2>
+        </div>
+
+        <div class="card">
+          <p>Simulación de reportes: exportar métricas, auditoría y trazabilidad.</p>
+          <button id="export-report" class="small-btn">Exportar CSV</button>
+        </div>
+      </section>
+
+      <!-- Config -->
+      <section class="section hidden" id="config">
+        <div class="section-header">
+          <h2>Configuración</h2>
+        </div>
+        <div class="card">
+          <p>Opciones de seguridad y perfiles de acceso.</p>
+        </div>
+      </section>
+
+      <!-- NUEVO: Nuevo Paciente -->
+      <section class="section hidden" id="nuevo-paciente">
+        <div class="section-header">
+          <h2>Alta de Nuevo Paciente</h2>
+          <div class="mini-search"><small class="muted">Complete los datos y seleccione el tipo de prestación.</small></div>
+        </div>
+
+        <div class="card">
+          <form id="form-new-patient" class="form-grid" novalidate>
+            <div class="form-row">
+              <label for="np-nombre">Nombre y Apellido *</label>
+              <input id="np-nombre" name="nombre" />
+              <small class="field-error" data-for="np-nombre"></small>
+            </div>
+
+            <div class="form-row">
+              <label for="np-dni">DNI *</label>
+              <input id="np-dni" name="dni" />
+              <small class="field-error" data-for="np-dni"></small>
+            </div>
+
+            <div class="form-row">
+              <label for="np-dob">Fecha de nacimiento</label>
+              <input id="np-dob" name="dob" type="date" />
+              <small class="field-error" data-for="np-dob"></small>
+            </div>
+
+            <div class="form-row">
+              <label for="np-sexo">Sexo</label>
+              <select id="np-sexo" name="sexo">
+                <option value="">--</option>
+                <option value="F">Femenino</option>
+                <option value="M">Masculino</option>
+                <option value="O">Otro/No declara</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="np-telefono">Teléfono</label>
+              <input id="np-telefono" name="telefono" />
+            </div>
+
+            <div class="form-row">
+              <label for="np-direccion">Dirección</label>
+              <input id="np-direccion" name="direccion" />
+            </div>
+
+            <div class="form-row">
+              <label for="np-obra">N° Afiliado</label>
+              <input id="np-obra" name="obra" />
+            </div>
+
+            <div class="form-row">
+              <label for="np-sangre">Grupo Sanguíneo</label>
+              <input id="np-sangre" name="sangre" placeholder="e.g. A+, O-" />
+            </div>
+
+            <div class="form-row full">
+              <label for="np-alergias">Alergias / Otros antecedentes</label>
+              <textarea id="np-alergias" name="alergias" rows="2"></textarea>
+            </div>
+
+            <div class="form-row full">
+              <label for="np-meds">Medicación crónica</label>
+              <textarea id="np-meds" name="meds" rows="2"></textarea>
+            </div>
+
+            <div class="form-row full">
+              <label for="np-emergencia">Contacto de emergencia</label>
+              <input id="np-emergencia" name="emergencia" placeholder="Nombre - Teléfono - Parentesco" />
+            </div>
+
+            <div class="form-row full">
+              <label>Tipo de prestación (seleccionar una)</label>
+              <div class="radio-row">
+                <label><input type="radio" name="encuentro" value="ambulatoria" checked> Consulta</label>
+                <label><input type="radio" name="encuentro" value="internacion"> Internación</label>
+                <label><input type="radio" name="encuentro" value="laboratorio"> Laboratorio</label>
+                <label><input type="radio" name="encuentro" value="imagenes"> Imágenes</label>
+                <label><input type="radio" name="encuentro" value="kinesiologia"> Kinesiología</label>
+                <label><input type="radio" name="encuentro" value="otros"> Otros</label>
+              </div>
+            </div>
+
+            <!-- Condicionales -->
+            <div id="enc-ambulatoria" class="form-conditional">
+              <div class="form-row full">
+                <label for="np-motivo">Motivo de la consulta</label>
+                <input id="np-motivo" name="motivo" />
+              </div>
+              <div class="form-row">
+                <label for="np-medico">Profesional a cargo</label>
+                <input id="np-medico" name="medico" />
+              </div>
+            </div>
+
+            <div id="enc-internacion" class="form-conditional hidden">
+              <div class="form-row">
+                <label for="np-ingreso">Fecha de ingreso</label>
+                <input id="np-ingreso" name="ingreso" type="date" />
+              </div>
+              <div class="form-row">
+                <label for="np-efector">Efector / Unidad</label>
+                <input id="np-efector" name="efector" />
+              </div>
+              <div class="form-row full">
+                <label for="np-diagnostico">Diagnóstico de ingreso</label>
+                <input id="np-diagnostico" name="diagnostico" />
+              </div>
+            </div>
+
+            <div id="enc-laboratorio" class="form-conditional hidden">
+              <div class="form-row">
+                <label for="np-lab-tipo">Tipo de estudio</label>
+                <input id="np-lab-tipo" name="labtipo" />
+              </div>
+              <div class="form-row">
+                <label for="np-lab-indicacion">Indicaciones</label>
+                <input id="np-lab-indicacion" name="labindicacion" />
+              </div>
+            </div>
+
+            <div id="enc-imagenes" class="form-conditional hidden">
+              <div class="form-row">
+                <label for="np-img-tipo">Tipo de estudio de imágenes</label>
+                <input id="np-img-tipo" name="imgtipo" />
+              </div>
+              <div class="form-row">
+                <label for="np-img-indic">Indicación clínica</label>
+                <input id="np-img-indic" name="imgindic" />
+              </div>
+            </div>
+
+            <div id="enc-kinesiologia" class="form-conditional hidden">
+              <div class="form-row">
+                <label for="np-kine-motivo">Motivo / Prescripción</label>
+                <input id="np-kine-motivo" name="kinemotivo" />
+              </div>
+              <div class="form-row">
+                <label for="np-kine-sesiones">Sesiones sugeridas</label>
+                <input id="np-kine-sesiones" name="kinesesiones" type="number" min="1" />
+              </div>
+            </div>
+
+            <div class="form-row full">
+              <label><input type="checkbox" id="np-consent" name="consent"> El paciente autoriza la incorporación de sus datos a la HCDU (consentimiento informado).</label>
+            </div>
+
+            <div class="form-row full form-actions">
+              <button type="submit" class="small-btn">Crear paciente</button>
+              <button type="button" id="btn-clear-new" class="small-btn" style="background:#999;margin-left:8px">Limpiar</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div>© 2025 - APOS Conecta Salud - Seminario Integrador - TUASIM .</div>
+    <div class="foot-links"><a href="#">Política de privacidad</a> · <a href="#">Contacto</a></div>
+  </footer>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
