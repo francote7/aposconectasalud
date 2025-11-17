@@ -1,440 +1,740 @@
-// app.js — Simulación front-end con Nuevo Paciente + HCDU + validación inline
+// =====================================================
+// APOS CONECTA — SISTEMA COMPLETO v2025
+// ESTADO: Conexión Activa con API para la carga inicial y el módulo Afiliación.
+// MEJORA: Fallback robusto a MOCK en caso de fallo de conexión a BDD.
+// =====================================================
 
-// Datos de ejemplo (simulados)
-let patients = [
-  { id:1, name:"Martín Gómez", dni:"33123456", age:39, last:"2025-10-02", summary:"Hipertensión arterial controlada", allergies:["Aspirina"], meds:["Enalapril 10mg"] },
-  { id:2, name:"María Pérez", dni:"27987654", age:52, last:"2025-09-10", summary:"Diabetes tipo 2", allergies:[], meds:["Metformina 850mg"] },
-  { id:3, name:"Lucía Fernández", dni:"21456789", age:28, last:"2025-08-20", summary:"Consulta ginecológica", allergies:["Penicilina"], meds:[] }
-];
+(() => {
 
-// Autorizaciones simuladas
-const authorizations = [
-  { id:101, patient:"Martín Gómez", type:"Estudio imagenológico", status:"Aprobado", date:"2025-09-28" },
-  { id:102, patient:"María Pérez", type:"Medicamento crónico", status:"Pendiente", date:"2025-10-05" }
-];
-
-// HCDU records: map patientId -> record object
-let hcRecords = {
-  1: { patientId:1, encounters:[
-    { id: 1001, type:'ambulatoria', date:'2025-10-02', summary:'Control rutina', details:{provider:'Sanatorio Mayo'} }
-  ]},
-  2: { patientId:2, encounters:[
-    { id: 1002, type:'laboratorio', date:'2025-09-30', summary:'Hemograma', details:{test:'Hemograma', result:'Normal'} }
-  ]},
-  3: { patientId:3, encounters:[] }
-};
-
-// KPI state (simulado) for dashboard (kept simple)
-let kpiState = { consultas:28, prestadores:35, duplicados:10, admin:50, ap:22 };
-
-document.addEventListener('DOMContentLoaded', () => {
-  cacheDom();
-  bindUiEvents();
-  renderInitial();
-  initNewPatientForm();
-  window.viewPatient = viewPatient; // expose for potential inline handlers
-});
-
-// --- DOM cache
-let dom = {};
-function cacheDom(){
-  dom = {
-    recentList: document.getElementById('recent-patients'),
-    patientsTbody: document.querySelector('#patients-table tbody'),
-    selectPatient: document.getElementById('select-patient'),
-    hcCard: document.getElementById('hc-card'),
-    hcName: document.getElementById('hc-name'),
-    hcDni: document.getElementById('hc-dni'),
-    hcSummary: document.getElementById('hc-summary'),
-    hcAllergies: document.getElementById('hc-allergies'),
-    hcMeds: document.getElementById('hc-meds'),
-    hcEncounters: document.getElementById('hc-encounters'),
-    hcLabs: document.getElementById('hc-labs'),
-    authTbody: document.querySelector('#auth-table tbody'),
-    toast: document.getElementById('toast'),
-    globalSearch: document.getElementById('global-search'),
-    btnSearch: document.getElementById('btn-search'),
-    patientFilter: document.getElementById('patient-filter'),
-    filterBtn: document.getElementById('filter-btn'),
-    loadHcBtn: document.getElementById('load-hc'),
-    exportReportBtn: document.getElementById('export-report'),
-    menuItems: document.querySelectorAll('.menu-item'),
-    navLinks: document.querySelectorAll('.topnav .nav-link'),
-    // new patient form controls (selected on init)
-    formNewPatient: document.getElementById('form-new-patient'),
-    btnClearNew: document.getElementById('btn-clear-new')
-  };
-}
-
-// --- UI events
-function bindUiEvents(){
-  dom.menuItems.forEach(btn=>{
-    btn.addEventListener('click', ()=> {
-      dom.menuItems.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      showSection(btn.dataset.section);
-    });
-  });
-
-  dom.navLinks.forEach(a=>{
-    a.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const nav = a.dataset.nav;
-      if(nav) {
-        dom.menuItems.forEach(b=>{
-          b.classList.toggle('active', b.dataset.section === nav);
-        });
-        showSection(nav);
-      }
-    });
-  });
-
-  dom.btnSearch.addEventListener('click', globalSearch);
-  dom.globalSearch.addEventListener('keydown', (e)=>{ if(e.key==='Enter') globalSearch(); });
-
-  dom.filterBtn.addEventListener('click', filterPatients);
-  dom.patientFilter.addEventListener('keydown', (e)=>{ if(e.key==='Enter') filterPatients(); });
-
-  dom.loadHcBtn.addEventListener('click', () => {
-    const id = Number(dom.selectPatient.value);
-    if(!id) return notify('Seleccione un afiliado', 2200);
-    const p = patients.find(x=>x.id===id);
-    fillHc(p);
-  });
-
-  dom.exportReportBtn.addEventListener('click', exportCSV);
-}
-
-// --- Initial render
-function renderInitial(){
-  showSection('dashboard');
-  renderRecent();
-  populatePatientsTable(patients);
-  populateSelect();
-  renderAuthorizations();
-  renderKpis();
-}
-
-// --- Sections
-function showSection(id){
-  document.querySelectorAll('.section').forEach(s=> s.classList.add('hidden'));
-  const el = document.getElementById(id);
-  if(el) {
-    el.classList.remove('hidden');
-    setTimeout(()=> el.querySelector('h2')?.focus(), 60);
-  }
-}
-
-// --- Render functions
-function renderRecent(){
-  dom.recentList.innerHTML = '';
-  patients.slice(0,5).forEach(p => {
-    const li = document.createElement('li');
-    li.innerHTML = `<strong>${p.name}</strong><br><small>${p.dni} — Última: ${p.last}</small>`;
-    dom.recentList.appendChild(li);
-  });
-}
-
-function populatePatientsTable(list){
-  dom.patientsTbody.innerHTML = '';
-  const rows = (list && list.length) ? list : patients;
-  rows.forEach(p=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${p.name}</td><td>${p.dni}</td><td>${p.age || ''}</td><td>${p.last}</td>
-      <td><button class="small-btn" data-id="${p.id}">Ver</button></td>`;
-    dom.patientsTbody.appendChild(tr);
-  });
-  // delegate
-  dom.patientsTbody.querySelectorAll('button[data-id]').forEach(btn=>{
-    btn.addEventListener('click', ()=> viewPatient(Number(btn.dataset.id)));
-  });
-}
-
-function populateSelect(){
-  dom.selectPatient.innerHTML = '<option value="">-- Seleccionar afiliado --</option>';
-  patients.forEach(p=>{
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = `${p.name} — ${p.dni}`;
-    dom.selectPatient.appendChild(opt);
-  });
-}
-
-function renderAuthorizations(){
-  dom.authTbody.innerHTML = '';
-  authorizations.forEach(a=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${a.id}</td><td>${a.patient}</td><td>${a.type}</td><td>${a.status}</td><td>${a.date}</td>`;
-    dom.authTbody.appendChild(tr);
-  });
-}
-
-// --- View patient & HCDU
-function viewPatient(id){
-  const p = patients.find(x=>x.id===id);
-  if(!p) return notify('Afiliado no encontrado', 2200);
-  dom.menuItems.forEach(b=> b.classList.toggle('active', b.dataset.section === 'historial'));
-  showSection('historial');
-  fillHc(p);
-}
-
-function fillHc(p){
-  if(!p) return;
-  dom.hcCard.style.display = 'block';
-  dom.hcName.textContent = p.name;
-  dom.hcDni.textContent = `DNI: ${p.dni}`;
-  dom.hcSummary.textContent = p.summary || '—';
-  dom.hcAllergies.innerHTML = (p.allergies && p.allergies.length) ? p.allergies.map(a=>`<li>${a}</li>`).join('') : '<li>—</li>';
-  dom.hcMeds.innerHTML = (p.meds && p.meds.length) ? p.meds.map(m=>`<li>${m}</li>`).join('') : '<li>—</li>';
-
-  // encounters from hcRecords
-  dom.hcEncounters.innerHTML = '';
-  const rec = hcRecords[p.id];
-  if(rec && rec.encounters && rec.encounters.length){
-    rec.encounters.slice().reverse().forEach(enc => {
-      const li = document.createElement('li');
-      li.innerHTML = `<strong>${enc.date}</strong> — <em>${enc.type}</em> — ${enc.summary || ''}<br><small>${JSON.stringify(enc.details)}</small>`;
-      dom.hcEncounters.appendChild(li);
-    });
-  } else {
-    dom.hcEncounters.innerHTML = '<li>No hay encuentros registrados.</li>';
-  }
-}
-
-// --- New Patient form: init, validation, submit, create HCDU
-function initNewPatientForm(){
-  const form = dom.formNewPatient;
-  if(!form) return;
-
-  // radio change handling
-  form.querySelectorAll('input[name="encuentro"]').forEach(r => r.addEventListener('change', onEncuentroChange));
-  // submit / clear
-  form.addEventListener('submit', handleNewPatientSubmit);
-  dom.btnClearNew?.addEventListener('click', () => {
-    form.reset();
-    clearFieldErrors(form);
-    document.querySelectorAll('.form-conditional').forEach(el=> el.classList.add('hidden'));
-    document.getElementById('enc-ambulatoria').classList.remove('hidden');
-  });
-
-  // initial state
-  document.getElementById('enc-ambulatoria').classList.remove('hidden');
-}
-
-function onEncuentroChange(e){
-  const val = e.target.value;
-  const mapping = {
-    ambulatoria: 'enc-ambulatoria',
-    internacion: 'enc-internacion',
-    laboratorio: 'enc-laboratorio',
-    imagenes: 'enc-imagenes',
-    kinesiologia: 'enc-kinesiologia',
-    otros: '' // none
-  };
-  document.querySelectorAll('.form-conditional').forEach(el=> el.classList.add('hidden'));
-  const id = mapping[val];
-  if(id) {
-    const el = document.getElementById(id);
-    if(el) el.classList.remove('hidden');
-  }
-}
-
-// validate fields and show inline messages
-function validateNewPatientForm(form){
-  clearFieldErrors(form);
-  const errors = [];
-  const name = form.nombre.value.trim();
-  const dni = form.dni.value.trim();
-  // Nombre required
-  if(!name){
-    setFieldError('np-nombre','El nombre es obligatorio');
-    errors.push('nombre');
-  }
-  // DNI required / numeric length
-  if(!dni){
-    setFieldError('np-dni','El DNI es obligatorio');
-    errors.push('dni');
-  } else {
-    const cleaned = dni.replace(/\D/g,'');
-    if(cleaned.length < 6){
-      setFieldError('np-dni','DNI inválido (mínimo 6 dígitos)');
-      errors.push('dni');
-    }
-  }
-  // Fecha de nacimiento: si existe, no puede ser futura
-  const dob = form.dob.value;
-  if(dob){
-    const d = new Date(dob);
-    const now = new Date();
-    if(d > now){
-      setFieldError('np-dob','Fecha de nacimiento no puede ser futura');
-      errors.push('dob');
-    }
-  }
-  return errors;
-}
-
-function setFieldError(fieldId, message){
-  const el = document.getElementById(fieldId);
-  if(!el) return;
-  const errorNode = document.querySelector(`.field-error[data-for="${fieldId}"]`);
-  if(errorNode) errorNode.textContent = message;
-  el.classList.add('field-invalid');
-}
-
-function clearFieldErrors(form){
-  form.querySelectorAll('.field-error').forEach(n => n.textContent = '');
-  form.querySelectorAll('.field-invalid').forEach(i => i.classList.remove('field-invalid'));
-}
-
-// submit handler: create patient and initial HCDU encounter
-function handleNewPatientSubmit(ev){
-  ev.preventDefault();
-  const form = ev.target;
-  const errs = validateNewPatientForm(form);
-  if(errs.length){
-    // focus first invalid
-    const first = form.querySelector('.field-invalid');
-    if(first) first.focus();
-    notify('Corregir los campos marcados', 2200);
-    return;
-  }
-
-  // Build patient object
-  const newId = (patients.length ? Math.max(...patients.map(p=>p.id)) : 0) + 1;
-  const nombre = form.nombre.value.trim();
-  const dni = form.dni.value.replace(/\D/g,'').trim();
-  const age = calculateAge(form.dob.value);
-  const allergies = form.alergias.value.trim() ? [form.alergias.value.trim()] : [];
-  const meds = form.meds.value.trim() ? [form.meds.value.trim()] : [];
-  const summary = form.motivo?.value?.trim() || '';
-
-  const paciente = {
-    id: newId,
-    name: nombre,
-    dni: dni,
-    age: age,
-    last: new Date().toISOString().slice(0,10),
-    summary: summary,
-    allergies: allergies,
-    meds: meds
-  };
-
-  // add to patients list
-  patients.unshift(paciente);
-
-  // Create initial HCDU record and encounter (depending on type)
-  const encuentroType = form.querySelector('input[name="encuentro"]:checked')?.value || 'ambulatoria';
-  const encounter = { id: Date.now(), type: encuentroType, date: new Date().toISOString().slice(0,10), summary: summary, details: {} };
-
-  // populate encounter details based on type
-  switch(encuentroType){
-    case 'ambulatoria':
-      encounter.details = { motivo: form.motivo?.value || '', medico: form.medico?.value || '' };
-      break;
-    case 'internacion':
-      encounter.details = { ingreso: form.ingreso?.value || '', efector: form.efector?.value || '', diagnostico: form.diagnostico?.value || '' };
-      break;
-    case 'laboratorio':
-      encounter.details = { tipo: form.labtipo?.value || '', indicacion: form.labindicacion?.value || '' };
-      break;
-    case 'imagenes':
-      encounter.details = { tipo: form.imgtipo?.value || '', indicacion: form.imgindic?.value || '' };
-      break;
-    case 'kinesiologia':
-      encounter.details = { motivo: form.kinemotivo?.value || '', sesiones: form.kinesesiones?.value || '' };
-      break;
-    default:
-      encounter.details = {};
-  }
-
-  hcRecords[newId] = { patientId: newId, encounters: [encounter] };
-
-  // UI updates
-  populatePatientsTable(patients);
-  populateSelect();
-  renderRecent();
-  notify('Paciente creado y registrado en la HCDU', 2200);
-
-  // reset form
-  form.reset();
-  clearFieldErrors(form);
-  document.querySelectorAll('.form-conditional').forEach(el=> el.classList.add('hidden'));
-  document.getElementById('enc-ambulatoria').classList.remove('hidden');
-
-  // optionally show the new patient's HCDU
-  setTimeout(()=> viewPatient(newId), 700);
-}
-
-// utility: calculate age from dob (YYYY-MM-DD)
-function calculateAge(dob){
-  if(!dob) return '';
-  const b = new Date(dob);
-  const now = new Date();
-  let age = now.getFullYear() - b.getFullYear();
-  const m = now.getMonth() - b.getMonth();
-  if(m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
-  return age;
-}
-
-// --- KPIs simple rendering (kept for completeness)
-function renderKpis(){
-  const setKpi = (elId, textId, value, target) => {
-    const el = document.getElementById(elId);
-    const text = document.getElementById(textId);
-    if(!el || !text) return;
-    const pctOfTarget = Math.min(100, Math.round((value/target)*100));
-    el.style.width = pctOfTarget + '%';
-    text.textContent = value + '%';
-  };
-  setKpi('kpi-consultas', 'kpi-consultas-text', kpiState.consultas, 60);
-  setKpi('kpi-prestadores', 'kpi-prestadores-text', kpiState.prestadores, 70);
-  setKpi('kpi-duplicados', 'kpi-duplicados-text', kpiState.duplicados, 25);
-}
-
-// --- Search / filter / CSV (existing)
-function filterPatients(){
-  const q = dom.patientFilter.value.trim().toLowerCase();
-  if(!q) {
-    populatePatientsTable(patients);
-    return;
-  }
-  const results = patients.filter(p => p.name.toLowerCase().includes(q) || p.dni.toLowerCase().includes(q));
-  if(results.length === 0){
-    dom.patientsTbody.innerHTML = '<tr><td colspan="5">No se encontraron afiliados</td></tr>';
-    return;
-  }
-  populatePatientsTable(results);
-}
-
-function globalSearch(){
-  const q = dom.globalSearch.value.trim().toLowerCase();
-  if(!q) return notify('Ingrese término de búsqueda',1800);
-  const found = patients.find(p => p.name.toLowerCase().includes(q) || p.dni.toLowerCase().includes(q));
-  if(found){
-    viewPatient(found.id);
-    notify(`Afiliado encontrado: ${found.name}`,2000);
-  } else notify('No se encontraron afiliados',2000);
-}
-
-function exportCSV(){
-  const rows = [
-    ['id','Afiliado','Tipo','Estado','Fecha'],
-    ...authorizations.map(a=>[a.id,a.patient,a.type,a.status,a.date])
+  // ============================================
+  // USUARIOS BASE DEL SISTEMA (MOCK TEMPORAL)
+  // ============================================
+  const users = [
+    { username: "admin", password: "admin123", role: "admin" },
+    { username: "auditor", password: "auditor123", role: "auditor" },
+    { username: "prestador", password: "prestador123", role: "prestador" },
+    { username: "operador", password: "operator123", role: "prestador" }
   ];
-  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'autorizaciones.csv';
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  notify('CSV exportado',2000);
-}
 
-// --- Notifications
-function notify(msg, time=1800){
-  dom.toast.textContent = msg;
-  dom.toast.classList.remove('hidden');
-  setTimeout(()=> dom.toast.classList.add('hidden'), time);
-}
+  let userList = [...users];
+
+  // ============================================
+  // PACIENTES - (AHORA SE CARGAN POR API O MOCK)
+  // Se inicializa vacío. El contenido se llena con loadPatients().
+  // ============================================
+  let patients = [];
+  
+  // SNOMED MOCK (Mantener como array local por simplicidad)
+  const snomedMock = [
+    { code: "44054006", term: "Diabetes Mellitus tipo 2" },
+    { code: "195967001", term: "Hipertensión arterial" },
+    { code: "38341003", term: "Neumonía" },
+    { code: "422034002", term: "Cefalea" },
+    { code: "36971009", term: "Lumbalgia" },
+    { code: "387713003", term: "Otitis media aguda" },
+    { code: "86049000", term: "Asma bronquial" }
+  ];
+
+
+  // ============================================
+  // ESTADO GLOBAL y REFERENCIAS DOM
+  // ============================================
+  let currentUser = null;
+  let currentPatient = null;
+  let diagSecundarios = [];
+
+  const loginScreen = document.getElementById("login-screen");
+  const mainScreen = document.getElementById("main-screen");
+  const usernameInput = document.getElementById("username");
+  const passwordInput = document.getElementById("password");
+  const currentUserEl = document.getElementById("current-user");
+  const currentRoleEl = document.getElementById("current-role");
+  const adminTab = document.getElementById("tab-admin");
+  const adminPanelBtn = document.getElementById("admin-panel-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const patientListEl = document.getElementById("patient-list");
+  const patientFilter = document.getElementById("patient-filter");
+  const patientNameEl = document.getElementById("patient-name");
+  const patientFiliatoryEl = document.getElementById("patient-filiatory");
+  const resumenBody = document.getElementById("resumen-body");
+
+  // Listas y Formularios
+  const ambList = document.getElementById("ambulatorio-list");
+  const intList = document.getElementById("internacion-list");
+  const evoTimeline = document.getElementById("evoluciones-timeline");
+  const farmList = document.getElementById("farmacia-list");
+  const labList = document.getElementById("lab-list");
+  const kineList = document.getElementById("kine-list");
+  const odontoList = document.getElementById("odonto-list");
+  const adminUserList = document.getElementById("admin-user-list");
+
+  const formAmb = document.getElementById("form-ambulatorio");
+  const formInt = document.getElementById("form-internacion");
+  const formEvo = document.getElementById("form-evolucion");
+  const formFarm = document.getElementById("form-farmacia");
+  const formLab = document.getElementById("form-lab");
+  const formKine = document.getElementById("form-kine");
+  const formOdonto = document.getElementById("form-odonto");
+  const formAdminUser = document.getElementById("admin-user-form");
+  const adminCancelEdit = document.getElementById("admin-cancel-edit");
+  const formAfiliacion = document.getElementById("form-afiliacion"); 
+
+  const snomedSearchAmb = document.getElementById("snomed-search-amb");
+  const snomedResultsAmb = document.getElementById("snomed-results-amb");
+  const addSnomedAmb = document.getElementById("add-snomed-amb");
+
+  const snomedSearchInt = document.getElementById("snomed-search-int");
+  const snomedResultsInt = document.getElementById("snomed-results-int");
+  const addSnomedInt = document.getElementById("add-snomed-int");
+
+
+  // ============================================
+  // LÓGICA DE CARGA DE DATOS (API - CON FALLBACK ROBUSTO)
+  // ============================================
+
+  /**
+   * Función de respaldo para cargar datos mock en caso de fallo de la API.
+   */
+  function useMockFallback() {
+      patients = [
+          {
+            id: "p1", nombre: "María González (MOCK)", documento: "23456789", nacimiento: "1976-04-12", sexo: "F",
+            filiatory: { domicilio: "San Nicolás de Bari 699", telefono: "3804-123456", obra_social: "12345678900" },
+            registros: { ambulatorio: [], internacion: { datos: null, evoluciones: [] }, farmacia: [], laboratorio: [], kinesiologia: [], odontologia: [] }
+          },
+          {
+            id: "p2", nombre: "Juan Pérez (MOCK)", documento: "30987654", nacimiento: "1988-11-02", sexo: "M",
+            filiatory: { domicilio: "25 de Mayo 442", telefono: "3804-369874", obra_social: "130987654" },
+            registros: { ambulatorio: [], internacion: { datos: null, evoluciones: [] }, farmacia: [], laboratorio: [], kinesiologia: [], odontologia: [] }
+          }
+      ];
+  }
+
+  /**
+   * Carga los afiliados desde el backend (api.php) o utiliza mock si falla.
+   * **CORRECCIÓN: Se agrega manejo de errores robusto.**
+   * @returns {Promise<void>}
+   */
+  async function loadPatients() {
+    console.log("Cargando afiliados desde la API...");
+
+    try {
+        const response = await fetch('api.php?action=get_patients');
+        
+        // Verifica si la respuesta HTTP es exitosa
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+        }
+        
+        const result = await response.json();
+
+        if (result.success) {
+            // Transformar la estructura de la BDD (plana) al formato JS (anidado)
+            patients = result.data.map(p => ({
+                id: p.id,
+                nombre: p.nombre,
+                documento: p.documento,
+                nacimiento: p.nacimiento,
+                sexo: p.sexo,
+                filiatory: { 
+                    domicilio: p.domicilio, 
+                    telefono: p.telefono, 
+                    obra_social: p.obra_social 
+                },
+                registros: {
+                    ambulatorio: [],
+                    internacion: { datos: null, evoluciones: [] },
+                    farmacia: [],
+                    laboratorio: [],
+                    kinesiologia: [],
+                    odontologia: []
+                }
+            }));
+            console.log(`Afiliados cargados: ${patients.length}`);
+        } else {
+            console.error("API Error (get_patients):", result.message);
+            // Si la API responde pero con éxito: false, usamos el fallback.
+            useMockFallback();
+        }
+    } catch (error) {
+        // Si hay un error de red o de parsing de JSON (indicando fallo total del PHP/MySQL)
+        console.error("Error de conexión o de parsing de JSON:", error);
+        alert("¡Advertencia! Conexión a la BDD o API fallida. Usando datos MOCK de respaldo. Revise XAMPP/db_config.php");
+        useMockFallback();
+    }
+
+    renderPatientList();
+  }
+
+
+  // ============================================
+  // LOGIN
+  // ============================================
+  document.getElementById("login-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const u = usernameInput.value.trim();
+    const p = passwordInput.value.trim();
+
+    // La validación sigue siendo local (frontend)
+    const found = userList.find(x => x.username === u && x.password === p);
+    if (!found) return alert("Credenciales incorrectas");
+
+    currentUser = found;
+    currentUserEl.textContent = found.username;
+    currentRoleEl.textContent = `Rol: ${found.role}`;
+
+    loginScreen.classList.add("hidden");
+    mainScreen.classList.remove("hidden");
+
+    applyRolePermissions();
+    loadPatients(); // <- Esta llamada está protegida por el fallback.
+  });
+
+
+  // ============================================
+  // LOGOUT
+  // ============================================
+  logoutBtn.addEventListener("click", () => {
+    currentUser = null;
+    currentPatient = null;
+    loginScreen.classList.remove("hidden");
+    mainScreen.classList.add("hidden");
+    usernameInput.value = "";
+    passwordInput.value = "";
+  });
+
+
+  // ============================================
+  // PERMISOS POR ROL
+  // ============================================
+  function applyRolePermissions() {
+    if (!currentUser) return;
+
+    if (currentUser.role === "admin" || currentUser.role === "prestador") {
+      enableForms(true);
+      if (currentUser.role === "admin") {
+        adminTab.style.display = "inline-block";
+        adminPanelBtn?.classList.remove("hidden");
+      } else {
+        adminTab.style.display = "none";
+        adminPanelBtn?.classList.add("hidden");
+      }
+
+    } else if (currentUser.role === "auditor") {
+      enableForms(false);
+      adminTab.style.display = "none";
+      adminPanelBtn?.classList.add("hidden");
+    }
+  }
+
+  function enableForms(enable) {
+    document.querySelectorAll("form").forEach(form => {
+      Array.from(form.elements).forEach(el => {
+        if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(el.tagName)) {
+          if(form.id !== 'login-form' && form.id !== 'admin-user-form' && el.id !== 'logout-btn' && el.id !== 'admin-cancel-edit') {
+            el.disabled = !enable;
+          }
+        }
+      });
+    });
+  }
+
+
+  // ============================================
+  // LISTADO DE PACIENTES
+  // ============================================
+  function renderPatientList(q = "") {
+    patientListEl.innerHTML = "";
+    q = q.toLowerCase();
+
+    patients
+      .filter(p => p.nombre.toLowerCase().includes(q) || p.documento.includes(q))
+      .forEach(p => {
+        const li = document.createElement("li");
+        li.textContent = `${p.nombre} — DNI ${p.documento}`;
+        li.addEventListener("click", () => selectPatient(p.id));
+        patientListEl.appendChild(li);
+      });
+  }
+
+  patientFilter.addEventListener("input", e => {
+    renderPatientList(e.target.value);
+  });
+
+
+  // ============================================
+  // SELECCIONAR PACIENTE
+  // ============================================
+  function selectPatient(id) {
+    currentPatient = patients.find(p => p.id === id);
+
+    patientNameEl.textContent = currentPatient.nombre;
+    patientFiliatoryEl.textContent = `Domicilio: ${currentPatient.filiatory.domicilio} • Tel: ${currentPatient.filiatory.telefono} • OS: ${currentPatient.filiatory.obra_social}`;
+
+    refreshModules();
+  }
+
+
+  // ============================================
+  // TABS
+  // ============================================
+  document.getElementById("module-tabs").addEventListener("click", e => {
+    const tab = e.target.closest(".tab");
+    if (!tab) return;
+
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".module").forEach(m => m.classList.remove("active"));
+
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.module).classList.add("active");
+
+    if (tab.dataset.module === "admin") renderAdminUsers();
+  });
+
+
+  // ============================================
+  // SNOMED
+  // ============================================
+  function populateSnomed(select, q) {
+    select.innerHTML = "";
+    const results = snomedMock.filter(s =>
+      s.term.toLowerCase().includes(q.toLowerCase())
+    );
+
+    if (results.length === 0) {
+      const opt = document.createElement("option");
+      opt.textContent = "Sin resultados";
+      opt.value = "";
+      select.appendChild(opt);
+      return;
+    }
+
+    results.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.code;
+      opt.textContent = `${s.term} (${s.code})`;
+      select.appendChild(opt);
+    });
+  }
+
+  function setupSnomedInput(input, select) {
+    input.addEventListener("input", () => populateSnomed(select, input.value));
+    populateSnomed(select, "");
+  }
+
+  setupSnomedInput(snomedSearchAmb, snomedResultsAmb);
+  setupSnomedInput(snomedSearchInt, snomedResultsInt);
+
+
+  addSnomedAmb.addEventListener("click", () => {
+    const code = snomedResultsAmb.value;
+    const item = snomedMock.find(s => s.code === code);
+    if (item) snomedSearchAmb.value = `${item.term} (${item.code})`;
+  });
+
+  addSnomedInt.addEventListener("click", () => {
+    const code = snomedResultsInt.value;
+    const item = snomedMock.find(s => s.code === code);
+    if (item) snomedSearchInt.value = `${item.term} (${item.code})`;
+  });
+
+
+  function parseSnomed(txt) {
+    if (!txt.includes("(")) return null;
+    return {
+      term: txt.substring(0, txt.lastIndexOf("(")).trim(),
+      code: txt.substring(txt.lastIndexOf("(") + 1, txt.lastIndexOf(")"))
+    };
+  }
+
+
+  // ============================================
+  // REFRESH GENERAL DE MÓDULOS
+  // ============================================
+  function refreshModules() {
+    if (!currentPatient) return;
+
+    // RESUMEN
+    resumenBody.innerHTML = `
+      <strong>Últimas consultas:</strong><br>
+      ${currentPatient.registros.ambulatorio.slice(-3).map(a => `${a.fecha} — ${a.motivo}`).join("<br>") || "Sin registros"}
+      <br><br>
+      <strong>Internación:</strong><br>
+      ${currentPatient.registros.internacion.datos ? currentPatient.registros.internacion.datos.ingreso : "Sin internación"}
+    `;
+
+    // AMBULATORIO
+    ambList.innerHTML = "";
+    currentPatient.registros.ambulatorio.slice().reverse().forEach(a => {
+      const div = document.createElement("div");
+      div.className = "list";
+      div.innerHTML = `
+        <li>
+          <strong>${a.fecha}</strong><br>
+          Motivo: ${a.motivo}<br>
+          Dx: ${a.dx.term} (${a.dx.code})<br>
+        </li>`;
+      ambList.appendChild(div);
+    });
+
+    // INTERNACION
+    if (currentPatient.registros.internacion.datos) {
+      const d = currentPatient.registros.internacion.datos;
+      intList.innerHTML = `
+        <div class="card small">
+          <strong>Ingreso:</strong> ${d.ingreso}<br>
+          Servicio: ${d.servicio} — Cama: ${d.cama}<br>
+          Dx ingreso: ${d.dx.term}
+        </div>
+      `;
+    } else {
+      intList.innerHTML = "<div class='muted'>Sin internación</div>";
+    }
+
+    renderTimeline();
+
+    // FARMACIA
+    farmList.innerHTML = "";
+    currentPatient.registros.farmacia.slice().reverse().forEach(f => {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${f.fecha}</strong> — ${f.medicamento} x${f.cantidad}`;
+      farmList.appendChild(li);
+    });
+
+    // LABORATORIO
+    labList.innerHTML = "";
+    currentPatient.registros.laboratorio.slice().reverse().forEach(l => {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${l.fecha}</strong> — ${l.estudio}<br><span class="muted">${l.resultado}</span>`;
+      labList.appendChild(li);
+    });
+
+    // KINESIOLOGÍA
+    kineList.innerHTML = "";
+    currentPatient.registros.kinesiologia.slice().reverse().forEach(k => {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${k.fecha}</strong> — ${k.tecnica}`;
+      kineList.appendChild(li);
+    });
+
+    // ODONTOLOGÍA
+    odontoList.innerHTML = "";
+    currentPatient.registros.odontologia.slice().reverse().forEach(o => {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${o.fecha}</strong> — Pieza ${o.pieza} — ${o.practica}`;
+      odontoList.appendChild(li);
+    });
+
+    // ADMIN
+    renderAdminUsers();
+  }
+
+
+  // ============================================
+  // TIMELINE
+  // ============================================
+  function renderTimeline() {
+    evoTimeline.innerHTML = "";
+    const reg = currentPatient.registros.internacion;
+
+    if (!reg.datos) {
+      evoTimeline.innerHTML = "<div class='muted'>Sin internación.</div>";
+      return;
+    }
+
+    if (reg.evoluciones.length === 0) {
+      evoTimeline.innerHTML = "<div class='muted'>Sin evoluciones.</div>";
+      return;
+    }
+
+    reg.evoluciones.slice().reverse().forEach(ev => {
+      const box = document.createElement("div");
+      box.className = "timeline-entry";
+      box.innerHTML = `
+        <strong>${ev.fecha}</strong><br>
+        <em>${ev.usuario}</em><br>
+        ${ev.evo}
+      `;
+      evoTimeline.appendChild(box);
+    });
+  }
+
+
+  // ============================================
+  // FORMULARIOS DE REGISTRO HSI (Guardado local, debe migrar a API)
+  // NOTA: Se mantiene el mock local en estos módulos.
+  // ============================================
+
+  // --- Ambulatorio ---
+  formAmb.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return alert("Elegir paciente");
+
+    const fd = new FormData(formAmb);
+    const profesional = fd.get("profesional");
+    const matricula = fd.get("matricula");
+    const fecha = fd.get("fecha");
+    const motivo = fd.get("motivo");
+    const examen = fd.get("examen");
+    const plan = fd.get("plan");
+    const obs = fd.get("obs");
+
+    const dx = parseSnomed(snomedSearchAmb.value);
+    if (!dx) return alert("SNOMED principal obligatorio");
+    
+    currentPatient.registros.ambulatorio.push({
+      profesional, matricula, fecha, motivo, examen, plan, obs,
+      dx,
+      dxSec: [...diagSecundarios]
+    });
+
+    diagSecundarios = [];
+    formAmb.reset();
+    refreshModules();
+    alert("Consulta Ambulatoria registrada (localmente)");
+  });
+
+  // --- Internación ---
+  formInt.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return;
+
+    const fd = new FormData(formInt);
+    const dx = parseSnomed(snomedSearchInt.value);
+    if (!dx) return alert("SNOMED ingreso obligatorio");
+
+    currentPatient.registros.internacion.datos = {
+      tipo: fd.get("tipo"),
+      ingreso: fd.get("ingreso"),
+      servicio: fd.get("servicio"),
+      cama: fd.get("cama"),
+      dx
+    };
+
+    formInt.reset();
+    refreshModules();
+    alert("Internación registrada (localmente)");
+  });
+
+  // --- Evolución ---
+  formEvo.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient.registros.internacion.datos)
+      return alert("Debe existir internación");
+
+    const fd = new FormData(formEvo);
+    currentPatient.registros.internacion.evoluciones.push({
+      fecha: fd.get("fecha"),
+      evo: fd.get("evo"),
+      usuario: currentUser.username
+    });
+
+    formEvo.reset();
+    refreshModules();
+    alert("Evolución registrada (localmente)");
+  });
+
+  // --- Farmacia ---
+  formFarm.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return;
+
+    const fd = new FormData(formFarm);
+    currentPatient.registros.farmacia.push({
+      fecha: fd.get("fecha"),
+      medicamento: fd.get("medicamento"),
+      cantidad: fd.get("cantidad"),
+      obs: fd.get("obs"),
+      usuario: currentUser.username
+    });
+
+    formFarm.reset();
+    refreshModules();
+    alert("Dispensa registrada (localmente)");
+  });
+
+  // --- Laboratorio ---
+  formLab.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return;
+
+    const fd = new FormData(formLab);
+    currentPatient.registros.laboratorio.push({
+      fecha: fd.get("fecha"),
+      estudio: fd.get("estudio"),
+      resultado: fd.get("resultado"),
+      usuario: currentUser.username
+    });
+
+    formLab.reset();
+    refreshModules();
+    alert("Laboratorio registrado (localmente)");
+  });
+
+  // --- Kinesiología ---
+  formKine.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return;
+
+    const fd = new FormData(formKine);
+    currentPatient.registros.kinesiologia.push({
+      fecha: fd.get("fecha"),
+      tecnica: fd.get("tecnica"),
+      obs: fd.get("obs"),
+      usuario: currentUser.username
+    });
+
+    formKine.reset();
+    refreshModules();
+    alert("Sesión Kine registrada (localmente)");
+  });
+
+  // --- Odontología ---
+  formOdonto.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!currentPatient) return;
+
+    const fd = new FormData(formOdonto);
+    currentPatient.registros.odontologia.push({
+      fecha: fd.get("fecha"),
+      pieza: fd.get("pieza"),
+      practica: fd.get("practica"),
+      obs: fd.get("obs"),
+      usuario: currentUser.username
+    });
+
+    formOdonto.reset();
+    refreshModules();
+    alert("Práctica Odontológica registrada (localmente)");
+  });
+  
+  // --- Afiliación (CON CONEXIÓN A API) ---
+  formAfiliacion.addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const fd = new FormData(formAfiliacion);
+    const documento = fd.get("documento").trim();
+    
+    // 1. Validación de DNI Duplicado (Control Preliminar en Frontend)
+    const isDuplicated = patients.some(p => p.documento === documento);
+    if (isDuplicated) {
+      return alert(`Error: Ya existe un afiliado registrado con DNI ${documento}.`);
+    }
+
+    // 2. Preparar datos para el Backend
+    const newAfiliadoData = {
+      action: 'add_afiliado',
+      nombre: fd.get("nombre"),
+      documento: documento,
+      nacimiento: fd.get("nacimiento"),
+      sexo: fd.get("sexo"),
+      domicilio: fd.get("domicilio"),
+      telefono: fd.get("telefono"),
+      os_nro: fd.get("obra_social") 
+    };
+
+    // 3. Llamada al Servidor (API) - Lógica de guardado
+    try {
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(newAfiliadoData)
+        });
+
+        // La respuesta puede fallar en HTTP o en la lógica de negocio (BDD)
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`Afiliado ${newAfiliadoData.nombre} (DNI: ${documento}) registrado con éxito.`);
+            formAfiliacion.reset();
+            
+            // Recargar la lista de afiliados con el nuevo registro de la BDD
+            await loadPatients(); 
+            
+            const newPatientId = result.data.id; 
+            if (newPatientId) selectPatient(newPatientId);
+            document.querySelector('.tab[data-module="resumen"]').click();
+
+        } else {
+            alert(`Error al registrar afiliado: ${result.message}`);
+        }
+    } catch (error) {
+        console.error("Error de conexión/registro:", error);
+        alert("No se pudo conectar con el servidor para registrar al afiliado. (Revise api.php)");
+    }
+  });
+
+
+  // ============================================
+  // ADMINISTRACIÓN DE USUARIOS (ABM)
+  // ============================================
+
+  function renderAdminUsers() {
+    adminUserList.innerHTML = "";
+    userList.forEach((u, index) => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span><strong>${u.username}</strong> — Rol: ${u.role}</span>
+        <span class="admin-actions">
+          <button class="btn" data-edit="${index}">Editar</button>
+          <button class="btn danger" data-delete="${index}">Eliminar</button>
+        </span>
+      `;
+      adminUserList.appendChild(li);
+    });
+  }
+
+  adminUserList.addEventListener("click", e => {
+    const edit = e.target.dataset.edit;
+    const del = e.target.dataset.delete;
+
+    if (edit !== undefined) loadUserIntoForm(edit);
+    if (del !== undefined) {
+      if (confirm("¿Eliminar usuario?")) {
+        userList.splice(del, 1);
+        renderAdminUsers();
+      }
+    }
+  });
+
+  function loadUserIntoForm(i) {
+    const u = userList[i];
+    formAdminUser.username.value = u.username;
+    formAdminUser.password.value = u.password;
+    formAdminUser.role.value = u.role;
+    formAdminUser.editIndex.value = i;
+  }
+
+  formAdminUser.addEventListener("submit", e => {
+    e.preventDefault();
+    // NOTA: Esta lógica también debe migrar a la API
+    const fd = new FormData(formAdminUser);
+    const username = fd.get("username");
+    const password = fd.get("password");
+    const role = fd.get("role");
+    const index = parseInt(fd.get("editIndex"));
+
+    const nuevo = { username, password, role };
+
+    if (index >= 0) {
+      userList[index] = nuevo;
+    } else {
+      userList.push(nuevo);
+    }
+
+    formAdminUser.reset();
+    formAdminUser.editIndex.value = -1;
+    renderAdminUsers();
+    alert("Usuario guardado (localmente)");
+  });
+
+  adminCancelEdit.addEventListener("click", () => {
+    formAdminUser.reset();
+    formAdminUser.editIndex.value = -1;
+  });
+
+  // Inicial (Solo renderiza la lista de pacientes/afiliados. Se cargan en el login)
+  renderPatientList();
+
+})();
